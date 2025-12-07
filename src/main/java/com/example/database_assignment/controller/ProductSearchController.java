@@ -1,12 +1,11 @@
 package com.example.database_assignment.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException; // Import mới
+import org.springframework.http.HttpStatus; // Import mới
+import org.springframework.http.ResponseEntity; // Import mới
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import javax.sql.DataSource;
 import java.math.BigDecimal;
@@ -29,8 +28,9 @@ public class ProductSearchController {
     @Autowired
     private DataSource dataSource;
 
+    // --- HÀM ĐÃ ĐƯỢC SỬA LẠI ---
     @GetMapping("/search")
-    public List<Map<String, Object>> search(
+    public ResponseEntity<?> search(
             @RequestParam Integer storeId,
             @RequestParam(required = false) String tenSanPham,
             @RequestParam(required = false) String tenDanhMuc,
@@ -40,18 +40,38 @@ public class ProductSearchController {
     ) {
         String sql = "EXEC sp_TimKiemSanPham_CuaHang @Store_id = ?, @Ten_san_pham = ?, @Ten_danh_muc = ?, @Gia_tu = ?, @Gia_den = ?, @Sap_xep = ?";
 
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql,
-                storeId,
-                tenSanPham,
-                tenDanhMuc,
-                giaTu,
-                giaDen,
-                sapXep
-        );
+        try {
+            // Thực thi câu lệnh
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql,
+                    storeId,
+                    tenSanPham,
+                    tenDanhMuc,
+                    giaTu,
+                    giaDen,
+                    sapXep
+            );
+            // Thành công: Trả về HTTP 200 và danh sách kết quả
+            return ResponseEntity.ok(rows);
 
-        return rows;
+        } catch (DataAccessException e) {
+            // Lỗi SQL (RAISERROR/THROW): Lấy nội dung lỗi gốc
+            String sqlErrorMessage = e.getRootCause() != null ? e.getRootCause().getMessage() : e.getMessage();
+
+            // Trả về HTTP 400 (Bad Request) để frontend nhận diện
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("message", sqlErrorMessage);
+
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+        } catch (Exception e) {
+            // Các lỗi hệ thống khác: Trả về HTTP 500
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("message", "Lỗi hệ thống: " + e.getMessage());
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
     }
 
+    // --- HÀM BÊN DƯỚI GIỮ NGUYÊN ---
     // GET /api/products/{id}/detail?storeId=...
     @GetMapping("/{id}/detail")
     public Map<String, Object> detail(
